@@ -1,0 +1,9 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/data/route": "/api/data",
+  "/api/reset/route": "/api/reset",
+  "/api/trigger/route": "/api/trigger",
+  "/api/webhook/route": "/api/webhook",
+  "/page": "/"
+}
