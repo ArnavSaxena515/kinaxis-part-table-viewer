@@ -7,17 +7,13 @@ import FilterBar from '../components/FilterBar';
 import DataTable from '../components/DataTable';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
-import { MAX_POLL_DURATION, EXTENDED_POLL_DURATION } from '../api/constants';
 
-// App states: idle | running | complete | error
 export default function Page() {
-  const [appState, setAppState] = useState('idle');
+  const [appState, setAppState] = useState('idle'); // idle | running | complete | error
   const [records, setRecords] = useState([]);
   const [errorType, setErrorType] = useState(null);
-  const [errorMessage, setErrorMessage] = useState('');
   const [elapsedMs, setElapsedMs] = useState(0);
   const [lastSync, setLastSync] = useState('');
-  const [maxDuration, setMaxDuration] = useState(MAX_POLL_DURATION);
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -25,159 +21,123 @@ export default function Page() {
   const [siteFilter, setSiteFilter] = useState('');
   const [procurementFilter, setProcurementFilter] = useState('');
 
-  // Refs for cleanup
-  const abortRef = useRef(null);
-  const timerRef = useRef(null);
-  const elapsedRef = useRef(null);
   const startTimeRef = useRef(null);
+  const elapsedTimerRef = useRef(null);
+  const lastStateRef = useRef('idle');
+  const recordsRef = useRef([]);
 
-  // Cleanup on unmount
+  // Continuous polling effect: "always be listening for incoming data"
   useEffect(() => {
-    return () => {
-      if (abortRef.current) abortRef.current.abort();
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (elapsedRef.current) clearInterval(elapsedRef.current);
-    };
-  }, []);
+    let isSubscribed = true;
 
-  const startPolling = useCallback(() => {
     const poll = async () => {
-      const elapsed = Date.now() - startTimeRef.current;
-
-      if (elapsed > maxDuration) {
-        clearInterval(elapsedRef.current);
-        setErrorType('POLLING_TIMEOUT');
-        setAppState('error');
-        return;
-      }
-
       try {
-        const res = await fetch('/api/data', { signal: abortRef.current?.signal });
+        const res = await fetch('/api/data');
         if (!res.ok) throw new Error('Poll failed');
         const result = await res.json();
+        
+        if (!isSubscribed) return;
 
         if (result.status === 'COMPLETED') {
-          clearInterval(elapsedRef.current);
-          const body = result.data || [];
-          if (body.length === 0) {
-            setErrorType('EMPTY_DATA');
-            setAppState('error');
-          } else {
-            setRecords(body);
+          const newRecords = result.data || [];
+          
+          // Render dashboard immediately with new data
+          setRecords(newRecords);
+          recordsRef.current = newRecords;
+          
+          if (lastStateRef.current !== 'complete') {
             setLastSync(new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC');
             setAppState('complete');
+            if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
           }
-          return;
-        }
+          lastStateRef.current = 'complete';
 
-        if (result.status === 'ERRORED') {
-          clearInterval(elapsedRef.current);
-          setErrorType('WORKFLOW_ERROR');
-          setAppState('error');
-          return;
-        }
+        } else if (result.status === 'RUNNING') {
+          if (lastStateRef.current !== 'running') {
+            setAppState('running');
+            setErrorType(null);
+            startTimeRef.current = Date.now();
+            if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+            elapsedTimerRef.current = setInterval(() => {
+              setElapsedMs(Date.now() - startTimeRef.current);
+            }, 500);
+          }
+          lastStateRef.current = 'running';
 
-        // Status is RUNNING or IDLE — continue polling
-        timerRef.current = setTimeout(poll, 2000);
-      } catch (err) {
-        if (err.name === 'AbortError') return;
-        clearInterval(elapsedRef.current);
-        if (err.message.includes('NETWORK')) {
-          setErrorType('NETWORK_ERROR');
+        } else if (result.status === 'ERRORED') {
+          if (lastStateRef.current !== 'error') {
+            setAppState('error');
+            setErrorType('WORKFLOW_ERROR');
+            if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+          }
+          lastStateRef.current = 'error';
+
         } else {
-          setErrorType('WORKFLOW_ERROR');
+          // IDLE state
+          if (lastStateRef.current !== 'idle' && lastStateRef.current !== 'complete') {
+            setAppState('idle');
+            if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+          }
+          // If it was complete, but Redis expired, we might transition to IDLE or we can keep the old data showing.
+          // The prompt says "If status is RUNNING or IDLE, show the empty state".
+          // If we transition to IDLE, we should clear.
+          if (lastStateRef.current !== 'idle' && result.status === 'IDLE') {
+             setAppState('idle');
+             setRecords([]);
+             recordsRef.current = [];
+          }
+          lastStateRef.current = 'idle';
         }
-        setAppState('error');
+      } catch (err) {
+        // Silently ignore network errors during continuous background polling 
+        console.error('Polling error', err);
       }
     };
 
+    // Poll immediately on mount, then every 3 seconds
     poll();
-  }, [maxDuration]);
+    const intervalId = setInterval(poll, 3000);
 
-  // Start the workflow
-  const startWorkflow = useCallback(async () => {
-    // Reset state
-    setAppState('running');
-    setErrorType(null);
-    setErrorMessage('');
-    setElapsedMs(0);
-    setMaxDuration(MAX_POLL_DURATION);
-
-    // Start elapsed timer
-    startTimeRef.current = Date.now();
-    if (elapsedRef.current) clearInterval(elapsedRef.current);
-    elapsedRef.current = setInterval(() => {
-      setElapsedMs(Date.now() - startTimeRef.current);
-    }, 500);
-
-    // Create abort controller
-    abortRef.current = new AbortController();
-
-    try {
-      // Trigger the workflow using the internal API route
-      const res = await fetch('/api/trigger', { method: 'POST', signal: abortRef.current.signal });
-      if (!res.ok) throw new Error('Trigger failed');
-      
-      // Immediately start polling data route
-      startPolling();
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      clearInterval(elapsedRef.current);
-      setErrorType('TRIGGER_FAILED');
-      setAppState('error');
-    }
-  }, [startPolling]);
-
-  // Error handlers
-  const handleRetry = useCallback(() => {
-    if (errorType === 'NETWORK_ERROR') {
-      // Resume polling
-      setAppState('running');
-      setErrorType(null);
-      startTimeRef.current = Date.now();
-      elapsedRef.current = setInterval(() => {
-        setElapsedMs(Date.now() - startTimeRef.current);
-      }, 500);
-      abortRef.current = new AbortController();
-      startPolling();
-    } else {
-      startWorkflow();
-    }
-  }, [errorType, startPolling, startWorkflow]);
-
-  const handleKeepWaiting = useCallback(() => {
-    setMaxDuration((prev) => prev + EXTENDED_POLL_DURATION);
-    setAppState('running');
-    setErrorType(null);
-    startTimeRef.current = Date.now() - elapsedMs; // keep cumulative elapsed
-    elapsedRef.current = setInterval(() => {
-      setElapsedMs(Date.now() - startTimeRef.current);
-    }, 500);
-    abortRef.current = new AbortController();
-    startPolling();
-  }, [elapsedMs, startPolling]);
-
-  const handleCancel = useCallback(() => {
-    if (abortRef.current) abortRef.current.abort();
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (elapsedRef.current) clearInterval(elapsedRef.current);
-    setAppState('idle');
-    setErrorType(null);
+    return () => {
+      isSubscribed = false;
+      clearInterval(intervalId);
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+    };
   }, []);
 
-  const handleResync = useCallback(async () => {
-    if (abortRef.current) abortRef.current.abort();
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (elapsedRef.current) clearInterval(elapsedRef.current);
-    
-    setAppState('idle');
-    setRecords([]);
+  // Button triggers
+  const startWorkflow = useCallback(async () => {
+    // 1. Optimistic UI update
+    setAppState('running');
+    setErrorType(null);
+    startTimeRef.current = Date.now();
+    if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+    elapsedTimerRef.current = setInterval(() => {
+      setElapsedMs(Date.now() - startTimeRef.current);
+    }, 500);
+    lastStateRef.current = 'running';
     
     try {
-        await fetch('/api/reset', { method: 'POST' });
-    } catch (e) {
-        console.error('Failed to reset', e);
+      // 2. Clear stale data via reset
+      await fetch('/api/reset', { method: 'POST' });
+      // 3. Trigger workflow
+      const res = await fetch('/api/trigger', { method: 'POST' });
+      if (!res.ok) throw new Error('Trigger failed');
+    } catch (err) {
+      console.error(err);
+      setErrorType('TRIGGER_FAILED');
+      setAppState('error');
+      lastStateRef.current = 'error';
     }
+  }, []);
+
+  const handleResync = useCallback(() => {
+    setRecords([]);
+    recordsRef.current = [];
+    setSearchQuery('');
+    setTypeFilter('');
+    setSiteFilter('');
+    setProcurementFilter('');
     startWorkflow();
   }, [startWorkflow]);
 
@@ -185,7 +145,6 @@ export default function Page() {
   const filteredRecords = useMemo(() => {
     if (!records.length) return [];
     return records.filter((r) => {
-      // Search query across all string fields
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         const searchFields = [r.Name, r.Type, r.UOM, r.ProductGroup, r.Division, r.Site, r.MRPType, r.ProcurementType];
@@ -259,9 +218,15 @@ export default function Page() {
               <ErrorState
                 errorType={errorType}
                 errorMessage={errorMessage}
-                onRetry={handleRetry}
-                onKeepWaiting={handleKeepWaiting}
-                onCancel={handleCancel}
+                onRetry={startWorkflow}
+                onKeepWaiting={() => {
+                  setAppState('running');
+                  lastStateRef.current = 'running';
+                }}
+                onCancel={() => {
+                  setAppState('idle');
+                  lastStateRef.current = 'idle';
+                }}
               />
             </section>
           )}
