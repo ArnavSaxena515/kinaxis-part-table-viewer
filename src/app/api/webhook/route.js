@@ -17,6 +17,7 @@ export async function POST(request) {
     if (!bodyText) {
       throw new Error('Empty body');
     }
+    console.log('WEBHOOK RAW BODY (first 500 chars):', bodyText.substring(0, 500));
 
     let body = null;
     try {
