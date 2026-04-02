@@ -18,7 +18,12 @@ export async function POST(request) {
       throw new Error('Empty body');
     }
 
-    const body = JSON.parse(bodyText);
+    let body = null;
+    try {
+      body = JSON.parse(bodyText);
+    } catch (e) {
+      // Malformed JSON expected in some cases from proxy — will use string fallback below
+    }
     
     // 1. If body has an "objects" key and it's an array, use that
     // 2. If body itself is an array, use it directly
@@ -32,6 +37,24 @@ export async function POST(request) {
       const firstArray = Object.values(body).find(val => Array.isArray(val));
       if (firstArray) {
         records = firstArray;
+      }
+    }
+
+    // 4. Fallback for malformed JSON using raw text
+    if (!records || records.length === 0) {
+      const startIndex = bodyText.indexOf('[');
+      const endIndex = bodyText.lastIndexOf(']');
+
+      if (startIndex !== -1 && endIndex !== -1) {
+        const arrayStr = bodyText.substring(startIndex, endIndex + 1);
+        try {
+          const parsedArray = JSON.parse(arrayStr);
+          if (Array.isArray(parsedArray)) {
+            records = parsedArray;
+          }
+        } catch (e) {
+          // Both approaches failed
+        }
       }
     }
 
