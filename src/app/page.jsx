@@ -12,6 +12,7 @@ export default function Page() {
   const [appState, setAppState] = useState('idle'); // idle | running | complete | error
   const [records, setRecords] = useState([]);
   const [errorType, setErrorType] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [lastSync, setLastSync] = useState('');
 
