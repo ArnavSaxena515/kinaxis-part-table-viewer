@@ -19,9 +19,19 @@ export async function POST(request) {
     }
     console.log('WEBHOOK RAW BODY (first 500 chars):', bodyText.substring(0, 500));
 
+    // Remove outer quotes if double-encoded
+    let cleaned = bodyText;
+    if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+      try {
+        cleaned = JSON.parse(cleaned); // parse the outer string layer
+      } catch (e) {
+        // ignore
+      }
+    }
+
     let body = null;
     try {
-      body = JSON.parse(bodyText);
+      body = JSON.parse(cleaned);
     } catch (e) {
       // Malformed JSON expected in some cases from proxy — will use string fallback below
     }
@@ -43,11 +53,11 @@ export async function POST(request) {
 
     // 4. Fallback for malformed JSON using raw text
     if (!records || records.length === 0) {
-      const startIndex = bodyText.indexOf('[');
-      const endIndex = bodyText.lastIndexOf(']');
+      const startIndex = cleaned.indexOf('[');
+      const endIndex = cleaned.lastIndexOf(']');
 
       if (startIndex !== -1 && endIndex !== -1) {
-        const arrayStr = bodyText.substring(startIndex, endIndex + 1);
+        const arrayStr = cleaned.substring(startIndex, endIndex + 1);
         try {
           const parsedArray = JSON.parse(arrayStr);
           if (Array.isArray(parsedArray)) {
