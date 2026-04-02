@@ -48,24 +48,6 @@ export default function Header({ appState, recordCount, lastSync, onResync }) {
             Re-sync
           </button>
         )}
-
-        {/* Icons */}
-        <div className="flex items-center gap-1 text-on-surface-variant">
-          <span className="material-symbols-outlined text-xl">hub</span>
-        </div>
-        <div className="flex items-center gap-1 text-on-surface-variant">
-          <span className="material-symbols-outlined text-xl">notifications</span>
-        </div>
-        <div className="flex items-center gap-1 text-on-surface-variant">
-          <span className="material-symbols-outlined text-xl">settings</span>
-        </div>
-
-        {/* Avatar */}
-        <div className="ml-4 flex items-center gap-3">
-          <div className="w-8 h-8 bg-surface-container-high flex items-center justify-center overflow-hidden">
-            <span className="material-symbols-outlined text-on-surface-variant text-lg">person</span>
-          </div>
-        </div>
       </div>
     </header>
   );

@@ -22,12 +22,11 @@ export default function FilterBar({
     <section className="bg-surface-container-low p-4 flex flex-wrap items-center gap-4">
       {/* Search */}
       <div className="relative flex-1 min-w-[240px]">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-on-surface-variant">search</span>
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-white border-0 py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full bg-white border-0 py-2.5 pl-4 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           placeholder="Search by name, type, site, or any field..."
         />
       </div>

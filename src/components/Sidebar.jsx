@@ -32,7 +32,6 @@ export default function Sidebar() {
                 : 'flex items-center gap-4 px-4 py-3 text-charcoal opacity-60 hover:text-primary hover:bg-white/50 border-l-4 border-transparent transition-all duration-200'
             }
           >
-            <span className="material-symbols-outlined">{item.icon}</span>
             <span className="uppercase tracking-widest text-[10px]">{item.label}</span>
           </a>
         ))}
@@ -41,7 +40,7 @@ export default function Sidebar() {
       {/* Bottom button */}
       <div className="mt-auto px-6">
         <button className="w-full bg-primary text-on-primary py-3 px-4 uppercase tracking-widest text-[10px] font-bold hover:bg-primary-container transition-colors">
-          Refresh Cobalt API
+          Refresh
         </button>
       </div>
     </aside>

@@ -74,7 +74,7 @@ export default function DetailPanel({ record, onClose }) {
                     <div className="bg-slate-400 text-white px-3 py-2 text-[10px] font-black">No Sources</div>
                   )}
                 </div>
-                <span className="material-symbols-outlined text-on-surface-variant">arrow_forward</span>
+                <span className="text-on-surface-variant font-bold text-lg">→</span>
                 <div className="flex-1 bg-primary text-white p-4 font-black text-center text-sm">
                   Kinaxis Part Record
                 </div>
