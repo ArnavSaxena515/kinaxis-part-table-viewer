@@ -26,6 +26,7 @@ export default function Page() {
   const elapsedTimerRef = useRef(null);
   const lastStateRef = useRef('idle');
   const recordsRef = useRef([]);
+  const pollIntervalRef = useRef(null);
 
   // Continuous polling effect: "always be listening for incoming data"
   useEffect(() => {
@@ -42,16 +43,21 @@ export default function Page() {
         if (result.status === 'COMPLETED') {
           const newRecords = result.data || [];
           
-          // Render dashboard immediately with new data
-          setRecords(newRecords);
-          recordsRef.current = newRecords;
-          
-          if (lastStateRef.current !== 'complete') {
-            setLastSync(new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC');
-            setAppState('complete');
-            if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+          if (newRecords.length > 0) {
+            // Render dashboard immediately with new data
+            setRecords(newRecords);
+            recordsRef.current = newRecords;
+            
+            if (lastStateRef.current !== 'complete') {
+              setLastSync(new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC');
+              setAppState('complete');
+              if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+            }
+            lastStateRef.current = 'complete';
+
+            // stop polling
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           }
-          lastStateRef.current = 'complete';
 
         } else if (result.status === 'RUNNING') {
           if (lastStateRef.current !== 'running') {
@@ -97,11 +103,11 @@ export default function Page() {
 
     // Poll immediately on mount, then every 3 seconds
     poll();
-    const intervalId = setInterval(poll, 3000);
+    pollIntervalRef.current = setInterval(poll, 3000);
 
     return () => {
       isSubscribed = false;
-      clearInterval(intervalId);
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
     };
   }, []);

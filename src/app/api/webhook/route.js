@@ -20,15 +20,23 @@ export async function POST(request) {
 
     const body = JSON.parse(bodyText);
     
-    // The body will be the array of harmonized records directly: [ { Name: "85", ... }, ... ]
-    // OR it may be wrapped: { "data": [ ... ] } — handle both cases
+    // 1. If body has an "objects" key and it's an array, use that
+    // 2. If body itself is an array, use it directly
+    // 3. Otherwise find the first array value in the body object
     let records = [];
-    if (Array.isArray(body)) {
+    if (body && Array.isArray(body.objects)) {
+      records = body.objects;
+    } else if (Array.isArray(body)) {
       records = body;
-    } else if (body && Array.isArray(body.data)) {
-      records = body.data;
-    } else {
-      throw new Error('Invalid data format received');
+    } else if (body && typeof body === 'object') {
+      const firstArray = Object.values(body).find(val => Array.isArray(val));
+      if (firstArray) {
+        records = firstArray;
+      }
+    }
+
+    if (!records || records.length === 0) {
+      throw new Error('No records found');
     }
 
     // Store in Redis
